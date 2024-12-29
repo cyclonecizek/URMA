@@ -3,6 +3,7 @@ from herbie import Herbie
 from datetime import datetime
 import metpy.interpolate
 import xarray as xr
+import numpy as np
 
 def get_urma_wind_speed(lat, lon, date_time):
     """
@@ -16,30 +17,36 @@ def get_urma_wind_speed(lat, lon, date_time):
     Returns:
         float: Wind speed at the given location and time in m/s.
     """
-    # Convert date_time to datetime object
     dt = datetime.strptime(date_time, "%Y-%m-%d %H:%M")
 
-    # Initialize Herbie for URMA
-    h = Herbie(dt, model="urma")
+    try:
+        # Initialize Herbie for the given date and model
+        h = Herbie(dt, model="urma", save_dir="/root/data", overwrite=True, verbose=True)
 
-    # Download the URMA dataset and open it with xarray
-    ds = h.xarray("APCP_surface")
+        # Load U and V wind components separately
+        u = h.xarray("UGRD")  # U-component of wind (m/s)
+        v = h.xarray("VGRD")  # V-component of wind (m/s)
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"Herbie could not find or fetch the URMA file: {e}")
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error while accessing URMA data: {e}")
 
-    # Extract U and V components of wind
-    u = ds["UGRD"]  # U-component of wind (m/s)
-    v = ds["VGRD"]  # V-component of wind (m/s)
+    # Calculate the difference between input coordinates and the grid
+    lat_diff = np.abs(u.latitude - lat)
+    lon_diff = np.abs(u.longitude - lon)
 
-    # Combine U and V into wind speed
-    wind_speed = (u**2 + v**2)**0.5
+    # Combine the differences to find the nearest grid point
+    total_diff = lat_diff + lon_diff
+    nearest_idx = np.unravel_index(np.argmin(total_diff.values), total_diff.shape)
 
-    # Interpolate to the desired lat/lon
-    point_wind_speed = metpy.interpolate.interpolate_to_points(
-        (wind_speed.latitude.values, wind_speed.longitude.values),
-        wind_speed.values,
-        [(lat, lon)]
-    )
+    # Extract U and V wind components at the nearest grid point
+    u_value = u.isel(y=nearest_idx[0], x=nearest_idx[1]).values
+    v_value = v.isel(y=nearest_idx[0], x=nearest_idx[1]).values
 
-    return point_wind_speed[0]
+    # Compute wind speed
+    wind_speed = np.sqrt(u_value**2 + v_value**2)
+
+    return wind_speed
 
 # Streamlit App
 st.title("URMA Wind Speed Fetcher")
