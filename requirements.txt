@@ -2,3 +2,4 @@ streamlit
 herbie-data
 xarray
 metpy
+numpy
