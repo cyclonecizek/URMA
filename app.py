@@ -21,7 +21,7 @@ def get_urma_wind_speed(lat, lon, date_time):
 
     try:
         # Initialize Herbie for the given date and model
-        h = Herbie(dt, model="urma", save_dir="/root/data", overwrite=True, verbose=True)
+        h = Herbie(dt, model="urma", product = "anl")
 
         # Load U and V wind components separately
         u = h.xarray("UGRD")  # U-component of wind (m/s)
